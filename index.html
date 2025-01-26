@@ -3,6 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#111827">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>RealTech 即時地震速報</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
@@ -167,6 +171,7 @@
             justify-content: space-around;
             align-items: center;
             backdrop-filter: blur(10px);
+            padding-bottom: calc(12px + env(safe-area-inset-bottom));
         }
 
         .nav-item {
@@ -910,6 +915,31 @@
                 opacity: 1;
             }
         }
+
+        .version-info {
+            position: fixed;
+            bottom: 85px;
+            left: 10px;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            z-index: 999;
+            opacity: 0.8;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            background-color: rgba(17, 24, 39, 0.6);
+            padding: 4px 8px;
+            border-radius: 4px;
+            backdrop-filter: blur(4px);
+        }
+
+        /* 確保在小螢幕上也能看到版本號 */
+        @media screen and (max-height: 600px) {
+            .version-info {
+                bottom: 65px;
+                left: 5px;
+                font-size: 0.7rem;
+                padding: 2px 6px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -998,9 +1028,9 @@
                     <div class="test-buttons">
                         <button class="test-button" id="test-warning-btn">開始測試</button>
                         <button class="test-button test-button-stop" id="stop-test-btn" style="display: none;">結束測試</button>
-                    </div>
                 </div>
             </div>
+        </div>
             <div class="settings-section">
                 <h3 class="settings-section-title">開發者選項</h3>
                 <div class="settings-item">
@@ -1009,8 +1039,8 @@
                         <input type="checkbox" id="dev-mode-toggle">
                         <span class="slider"></span>
                     </label>
-                </div>
             </div>
+                    </div>
             <div class="settings-section">
                 <h3 class="settings-section-title">帳號設置</h3>
                 <div class="settings-item">
@@ -1028,7 +1058,7 @@
                 <div class="earthquake-info-title">地震資訊</div>
                 <div class="earthquake-info-details" id="earthquake-info-details"></div>
             </div>
-        </div>
+            </div>
 
         <div id="dev-output" class="dev-output"></div>
 
@@ -1036,7 +1066,7 @@
             <div class="login-box">
                 <div class="login-logo">
                     <i class="fas fa-broadcast-tower"></i>
-                </div>
+        </div>
                 <div class="login-title">RealTech 即時地震速報</div>
                 <div class="login-subtitle">請登入以使用系統功能</div>
                 <input type="text" id="username" class="login-input" placeholder="請輸入帳號" autocomplete="username">
@@ -1045,6 +1075,8 @@
                 <div id="login-error" class="login-error"></div>
             </div>
         </div>
+
+        <div class="version-info">v0.0.2 alpha</div>
     </div>
 
     <script>
@@ -1233,7 +1265,7 @@
             try {
                 const response = await fetch('https://lb-2.exptech.dev/api/v1/trem/rts');
                 const data = await response.json();
-
+                
                 if (data.station) {
                     // 批量更新所有測站
                     const updates = [];
@@ -1274,11 +1306,11 @@
                                 `;
 
                                 updates.push(() => {
-                                    marker.marker.setIcon(L.divIcon({
+                                marker.marker.setIcon(L.divIcon({
                                         html: markerHtml,
-                                        className: '',
-                                        iconSize: [size, size]
-                                    }));
+                                    className: '',
+                                    iconSize: [size, size]
+                                }));
                                 });
                             }
                         }
@@ -1442,7 +1474,6 @@
                                 box-shadow: 0 0 4px ${color};
                                 width: ${size}px;
                                 height: ${size}px;
-                                ${intensity >= 4 ? 'animation: pulse 1s infinite;' : ''}
                             ">
                                 ${showPGAValue && pga > 0.5 ? `<div class="station-label" style="color: white;">${pga.toFixed(1)}</div>` : ''}
                             </div>
@@ -1535,6 +1566,21 @@
         }
 
         function initialize() {
+            // 檢查是否在 WebView 中
+            const isWebView = navigator.userAgent.includes('wv') || 
+                              navigator.userAgent.includes('WebView');
+            
+            if (isWebView) {
+                devLog('在 WebView 中運行', 'info');
+                // 禁用某些瀏覽器特定功能
+                document.addEventListener('contextmenu', e => e.preventDefault());
+                document.addEventListener('touchmove', e => {
+                    if (e.touches.length > 1) {
+                        e.preventDefault();
+                    }
+                }, { passive: false });
+            }
+
             // 先初始化地圖
             initializeMap();
             
@@ -1603,7 +1649,7 @@
                     // 檢查備用來源
                     try {
                         const response = await fetch('https://x-flight-together.github.io/RealTech_EEW_Server/live_eew.json');
-                        const data = await response.json();
+                const data = await response.json();
                         if (Array.isArray(data) && data.length > 0) {
                             const eew = data[0];
                             if (eew && eew.eq && eew.status === 1) {
@@ -1611,7 +1657,7 @@
                                 hasValidEEW = true;
                             }
                         }
-                    } catch (error) {
+            } catch (error) {
                         console.error('備用來源獲取失敗:', error);
                     }
 
@@ -1862,8 +1908,8 @@
             if (!username || !password) {
                 errorElement.textContent = '請輸入帳號和密碼';
                 errorElement.style.display = 'block';
-                return;
-            }
+                    return;
+                }
 
             if (users[username] && users[username].password === password) {
                 currentUser = {
@@ -1926,31 +1972,15 @@
                 updateIntensityArea(eew.eq);
                 
                 // 播放警報音效
-                const audioUrl = 'https://github.com/ExpTechTW/DPIP/raw/refs/heads/main/android/app/src/main/res/raw/warn.ogg';
-                const audio = new Audio(audioUrl);
-                audio.volume = 0.5;
+                playAlertSound();
                 
-                // 確保音效已加載
-                audio.addEventListener('canplaythrough', () => {
-                    audio.play().catch(error => {
-                        console.error('播放警報音效失敗:', error);
-                        // 如果自動播放失敗，嘗試在用戶互動時播放
-                        document.addEventListener('click', function playOnClick() {
-                            audio.play();
-                            document.removeEventListener('click', playOnClick);
-                        }, { once: true });
-                    });
-                });
-                
-                audio.load();
-
                 // 創建和顯示警報框
                 const alertContainer = document.getElementById('alert-container');
                 if (!alertContainer) return;
 
-                const alertBox = document.createElement('div');
-                alertBox.className = 'alert-box';
-                alertBox.id = alertId;
+            const alertBox = document.createElement('div');
+            alertBox.className = 'alert-box';
+            alertBox.id = alertId;
                 
                 const eqTime = new Date(parseInt(eew.eq.time));
                 const timeDiff = Math.floor((Date.now() - eqTime) / 1000);
@@ -1968,26 +1998,26 @@
                         })
                         .join(' | ');
                 }
-
-                alertBox.innerHTML = `
+            
+            alertBox.innerHTML = `
                     <div class="alert-intensity">
                         <div class="alert-intensity-value">${eew.eq.max || '?'}</div>
                         <div class="alert-intensity-label">預估震度</div>
                     </div>
-                    <div class="alert-content">
+                <div class="alert-content">
                         <div class="alert-location">${eew.eq.loc || '位置未知'}</div>
                         <div class="alert-details">
                             規模 ${eew.eq.mag} / 深度 ${eew.eq.depth || '?'}km<br>
                             ${areaInfo ? `預估震度: ${areaInfo}` : ''}
-                        </div>
+                </div>
                         <div class="alert-time">
                             ${formattedTime} (${timeDiff}秒前) - ${eew.final ? '最終報' : `第${eew.serial || 1}報`}
                         </div>
                     </div>
-                `;
-
-                alertContainer.appendChild(alertBox);
-                
+            `;
+            
+            alertContainer.appendChild(alertBox);
+            
                 // 顯示地震資訊面板
                 const eqInfo = document.getElementById('earthquake-info');
                 const eqDetails = document.getElementById('earthquake-info-details');
@@ -2006,6 +2036,31 @@
                 }
             } catch (error) {
                 console.error('顯示 EEW 警報失敗:', error);
+            }
+        }
+
+        // 修改 playAlertSound 函數
+        function playAlertSound() {
+            const isWebView = navigator.userAgent.includes('wv') || 
+                              navigator.userAgent.includes('WebView');
+
+            try {
+                const audioUrl = 'https://github.com/ExpTechTW/DPIP/raw/refs/heads/main/android/app/src/main/res/raw/warn.ogg';
+                const audio = new Audio(audioUrl);
+            audio.volume = 0.5;
+
+                if (isWebView && window.Android && window.Android.playSound) {
+                    // 使用 Android 原生方法播放音效
+                    window.Android.playSound();
+                } else {
+                    audio.play().catch(error => {
+                        console.error('音效播放失敗:', error);
+                        devLog('音效播放失敗: ' + error.message, 'error');
+                    });
+                }
+            } catch (error) {
+                console.error('音效播放失敗:', error);
+                devLog('音效播放失敗: ' + error.message, 'error');
             }
         }
 
