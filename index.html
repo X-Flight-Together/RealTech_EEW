@@ -7,6 +7,14 @@
     <meta name="theme-color" content="#111827">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="msapplication-tap-highlight" content="no">
+    <meta name="screen-orientation" content="portrait">
+    <meta name="full-screen" content="yes">
+    <meta name="browsermode" content="application">
+    <meta name="x5-orientation" content="portrait">
+    <meta name="x5-fullscreen" content="true">
+    <meta name="x5-page-mode" content="app">
     <title>RealTech 即時地震速報</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
@@ -1112,6 +1120,44 @@
 
         let currentUser = null;
 
+        // WebView 相關變量
+        const isWebView = navigator.userAgent.includes('wv') || 
+                          navigator.userAgent.includes('WebView');
+        const androidInterface = window.Android || null;
+        const webViewReady = new Promise((resolve) => {
+            if (isWebView) {
+                document.addEventListener('WebViewReady', () => resolve(true));
+                // 5秒後超時
+                setTimeout(() => resolve(false), 5000);
+            } else {
+                resolve(true);
+            }
+        });
+
+        // 添加簡單的調試工具
+        const Debug = {
+            log: function(msg, type = 'info') {
+                const time = new Date().toLocaleTimeString();
+                console.log(`[${time}][${type.toUpperCase()}] ${msg}`);
+                
+                if (isDevMode) {
+                    const output = document.getElementById('dev-output');
+                    if (output) {
+                        const line = document.createElement('div');
+                        line.className = `dev-output-line ${type}`;
+                        line.textContent = `[${time}] ${msg}`;
+                        output.appendChild(line);
+                        output.scrollTop = output.scrollHeight;
+                    }
+                }
+            },
+            
+            error: function(error) {
+                this.log(error.message || error, 'error');
+                console.error(error);
+            }
+        };
+
         function initializeMap() {
             map = L.map('map', {
                 center: [23.5, 121],
@@ -1236,11 +1282,11 @@
 
         async function fetchStations() {
             try {
-                console.log('開始獲取測站資料...');
+                Debug.log('開始獲取測站資料...');
                 const response = await fetch('https://raw.githubusercontent.com/ExpTechTW/API/master/Json/earthquake/station.json');
                 const data = await response.json();
                 
-                console.log(`接收到 ${Object.keys(data).length} 個測站的資料`);
+                Debug.log(`接收到 ${Object.keys(data).length} 個測站的資料`);
                 for (let fullStationId in data) {
                     const station = data[fullStationId];
                     const markerData = createStationMarker(station, fullStationId);
@@ -1253,7 +1299,7 @@
                 }
                 startEarthquakeDataFetching();
             } catch (error) {
-                console.error(`錯誤：無法獲取測站資料 - ${error.message}`);
+                Debug.error(`錯誤：無法獲取測站資料 - ${error.message}`);
             }
         }
 
@@ -1324,7 +1370,7 @@
                 lastPingTime = Date.now();
 
             } catch (error) {
-                console.error('更新數據失敗:', error);
+                Debug.error('更新數據失敗: ' + error.message);
                 devLog('更新數據失敗: ' + error.message, 'error');
             }
         }
@@ -1353,7 +1399,7 @@
                             map.setView([position.coords.latitude, position.coords.longitude], 12);
                         },
                         (error) => {
-                            console.error('無法獲取置:', error);
+                            Debug.error('無法獲取置: ' + error.message);
                         }
                     );
                 }
@@ -1419,7 +1465,7 @@
             
             if (testButton && stopTestButton) {
                 testButton.addEventListener('click', () => {
-                    devLog('開始測試模式', 'warning');
+                    Debug.log('開始測試模式', 'warning');
                     isTestMode = true;
                     testButton.style.display = 'none';
                     stopTestButton.style.display = 'block';
@@ -1515,7 +1561,7 @@
                 });
 
                 stopTestButton.addEventListener('click', () => {
-                    devLog('結束測試模式', 'warning');
+                    Debug.log('結束測試模式', 'warning');
                     isTestMode = false;
                     stopTestButton.style.display = 'none';
                     testButton.style.display = 'block';
@@ -1555,7 +1601,7 @@
             devModeToggle.addEventListener('change', (e) => {
                 if (!currentUser?.isAdmin) {
                     e.target.checked = false;
-                    alert('只有管理員可以使用開發者模式');
+                    Debug.error('只有管理員可以使用開發者模式');
                     return;
                 }
                 isDevMode = e.target.checked;
@@ -1565,49 +1611,82 @@
             });
         }
 
-        function initialize() {
-            // 檢查是否在 WebView 中
-            const isWebView = navigator.userAgent.includes('wv') || 
-                              navigator.userAgent.includes('WebView');
-            
-            if (isWebView) {
-                devLog('在 WebView 中運行', 'info');
-                // 禁用某些瀏覽器特定功能
-                document.addEventListener('contextmenu', e => e.preventDefault());
-                document.addEventListener('touchmove', e => {
-                    if (e.touches.length > 1) {
-                        e.preventDefault();
+        async function initialize() {
+            try {
+                Debug.log('開始初始化');
+                
+                // 等待 WebView 準備就緒
+                await webViewReady;
+                Debug.log('WebView 就緒');
+
+                if (isWebView) {
+                    Debug.log('設置 WebView 環境');
+                    // 禁用所有瀏覽器默認行為
+                    document.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+                    document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+                    document.addEventListener('touchend', (e) => e.preventDefault(), { passive: false });
+                    document.addEventListener('contextmenu', (e) => e.preventDefault());
+                    document.addEventListener('dblclick', (e) => e.preventDefault());
+                    
+                    // 設置視窗大小
+                    if (androidInterface?.setScreenSize) {
+                        const { innerWidth, innerHeight } = window;
+                        androidInterface.setScreenSize(innerWidth, innerHeight);
                     }
-                }, { passive: false });
-            }
+                    
+                    // 禁用滾動回彈
+                    document.body.style.overscrollBehavior = 'none';
+                    document.documentElement.style.overscrollBehavior = 'none';
+                    
+                    // 禁用文字選擇
+                    document.body.style.userSelect = 'none';
+                    document.body.style.webkitUserSelect = 'none';
+                    
+                    // 禁用縮放
+                    document.body.style.touchAction = 'none';
+                }
 
-            // 先初始化地圖
-            initializeMap();
-            
-            // 初始化 UI 處理
-            initializeUIHandlers();
-            
-            // 添加無地震速報提示
-            const noAlertMessage = document.createElement('div');
-            noAlertMessage.className = 'no-alert-message';
-            noAlertMessage.id = 'no-alert-message';
-            noAlertMessage.textContent = '目前無地震速報';
-            document.body.appendChild(noAlertMessage);
-            
-            // 檢查登入狀態
-            if (!checkLoginStatus()) {
-                document.getElementById('login-overlay').style.display = 'flex';
-                return;
-            }
+                // 先初始化地圖
+                Debug.log('初始化地圖');
+                initializeMap();
+                
+                // 初始化 UI 處理
+                Debug.log('初始化 UI');
+                initializeUIHandlers();
+                
+                // 添加無地震速報提示
+                const noAlertMessage = document.createElement('div');
+                noAlertMessage.className = 'no-alert-message';
+                noAlertMessage.id = 'no-alert-message';
+                noAlertMessage.textContent = '目前無地震速報';
+                document.body.appendChild(noAlertMessage);
+                
+                // 檢查登入狀態
+                Debug.log('檢查登入狀態');
+                if (!checkLoginStatus()) {
+                    document.getElementById('login-overlay').style.display = 'flex';
+                    return;
+                }
 
-            // 載入保存的設置
-            showPGAValue = localStorage.getItem('showPGAValue') === 'true';
-            
-            // 獲取測站資料
-            fetchStations();
-            
-            // 開始 EEW 檢查
-            startEEWChecking();
+                // 載入保存的設置
+                showPGAValue = localStorage.getItem('showPGAValue') === 'true';
+                
+                // 獲取測站資料
+                Debug.log('獲取測站資料');
+                await fetchStations();
+                
+                // 開始 EEW 檢查
+                Debug.log('啟動 EEW 檢查');
+                startEEWChecking();
+            } catch (error) {
+                Debug.error('初始化失敗: ' + error);
+                
+                // 重試機制
+                setTimeout(() => {
+                    Debug.log('嘗試重新初始化', 'warning');
+                    initialize();
+                }, 5000);
+            }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -1643,7 +1722,7 @@
                             }
                         }
                     } catch (error) {
-                        console.error('主要來源獲取失敗:', error);
+                        Debug.error('主要來源獲取失敗: ' + error.message);
                     }
 
                     // 檢查備用來源
@@ -1658,7 +1737,7 @@
                             }
                         }
             } catch (error) {
-                        console.error('備用來源獲取失敗:', error);
+                        Debug.error('備用來源獲取失敗: ' + error.message);
                     }
 
                     // 如果沒有有效的地震警報，顯示無地震速報
@@ -1683,7 +1762,7 @@
                     lastPingTime = Date.now();
 
                 } catch (error) {
-                    console.error('EEW 檢查失敗:', error);
+                    Debug.error('EEW 檢查失敗: ' + error.message);
                 }
             };
 
@@ -2035,31 +2114,28 @@
                     noAlertMessage.style.display = 'none';
                 }
             } catch (error) {
-                console.error('顯示 EEW 警報失敗:', error);
+                Debug.error('顯示 EEW 警報失敗: ' + error.message);
             }
         }
 
         // 修改 playAlertSound 函數
         function playAlertSound() {
-            const isWebView = navigator.userAgent.includes('wv') || 
-                              navigator.userAgent.includes('WebView');
-
             try {
-                const audioUrl = 'https://github.com/ExpTechTW/DPIP/raw/refs/heads/main/android/app/src/main/res/raw/warn.ogg';
-                const audio = new Audio(audioUrl);
-            audio.volume = 0.5;
-
-                if (isWebView && window.Android && window.Android.playSound) {
-                    // 使用 Android 原生方法播放音效
-                    window.Android.playSound();
+                if (isWebView && androidInterface?.playSound) {
+                    androidInterface.playSound();
                 } else {
-                    audio.play().catch(error => {
-                        console.error('音效播放失敗:', error);
-                        devLog('音效播放失敗: ' + error.message, 'error');
-                    });
+                    const audio = new Audio('https://github.com/ExpTechTW/DPIP/raw/refs/heads/main/android/app/src/main/res/raw/warn.ogg');
+                    audio.volume = 0.5;
+                    // 在用戶互動時播放
+                    const playPromise = audio.play();
+                    if (playPromise) {
+                        playPromise.catch(() => {
+                            document.addEventListener('click', () => audio.play(), { once: true });
+                        });
+                    }
                 }
             } catch (error) {
-                console.error('音效播放失敗:', error);
+                Debug.error('音效播放失敗: ' + error.message);
                 devLog('音效播放失敗: ' + error.message, 'error');
             }
         }
@@ -2076,6 +2152,30 @@
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
             return R * c;
         }
+
+        // 添加 WebView 錯誤處理
+        window.onerror = function(msg, url, line, col, error) {
+            Debug.error(`WebView 錯誤: ${msg} (${url}:${line}:${col})`);
+            if (isWebView && androidInterface?.onError) {
+                androidInterface.onError(msg);
+            }
+            return false;
+        };
+
+        // 添加網絡狀態監控
+        window.addEventListener('online', () => {
+            Debug.log('網絡已連接');
+            if (isWebView && androidInterface?.onNetworkChange) {
+                androidInterface.onNetworkChange(true);
+            }
+        });
+
+        window.addEventListener('offline', () => {
+            Debug.log('網絡已斷開', 'warning');
+            if (isWebView && androidInterface?.onNetworkChange) {
+                androidInterface.onNetworkChange(false);
+            }
+        });
     </script>
 </body>
 </html>
